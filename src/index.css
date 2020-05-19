@@ -1,0 +1,17 @@
+:root {
+  --primary-background-color: white;
+  --primary-text-color: black;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary-background-color: black;
+    --primary-text-color: white;
+  }
+}
+
+body {
+  background-color: var(--primary-background-color);
+  color: var(--primary-text-color);
+  font-family: sans-serif;
+}
