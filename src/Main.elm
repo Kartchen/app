@@ -1,8 +1,10 @@
 port module Main exposing (Model, Msg(..), init, main, update, view)
 
 import Browser
-import Html exposing (Html, button, div, h1, p, text)
+import Html exposing (Html, b, button, div, h1, i, li, p, text)
 import Html.Events exposing (onClick)
+import Html.Keyed exposing (ul)
+import Html.Lazy exposing (lazy)
 import Json.Decode
 import Json.Decode.Pipeline
 import Json.Encode
@@ -53,10 +55,18 @@ type User
     | LoggedIn UserData
 
 
+type alias Card =
+    { id : String
+    , title : String
+    , phrase : String
+    , translation : String
+    }
+
+
 type Cards
     = GetCardsFailed
     | SaveCardFailed
-    | CardsList (List String)
+    | CardsList (List Card)
 
 
 type alias Model =
@@ -88,7 +98,7 @@ type Msg
     | SaveCard -- TODO: add userId parameter
     | SaveCardError
     | InputChanged String
-    | CardsReceived (Result Json.Decode.Error (List String))
+    | CardsReceived (Result Json.Decode.Error (List Card))
     | CardsReceivedError
 
 
@@ -152,15 +162,40 @@ userDataDecoder =
         |> Json.Decode.Pipeline.optional "name" Json.Decode.string "User"
 
 
-cardsListDecoder : Json.Decode.Decoder (List String)
+cardDecoder : Json.Decode.Decoder Card
+cardDecoder =
+    Json.Decode.succeed Card
+        |> Json.Decode.Pipeline.required "id" Json.Decode.string
+        |> Json.Decode.Pipeline.required "title" Json.Decode.string
+        |> Json.Decode.Pipeline.required "phrase" Json.Decode.string
+        |> Json.Decode.Pipeline.required "translation" Json.Decode.string
+
+
+cardsListDecoder : Json.Decode.Decoder (List Card)
 cardsListDecoder =
     Json.Decode.succeed identity
-        |> Json.Decode.Pipeline.required "cards" (Json.Decode.list Json.Decode.string)
+        |> Json.Decode.Pipeline.required "cards" (Json.Decode.list cardDecoder)
 
 
 formatUserName : UserData -> String
 formatUserName useData =
     useData.name |> String.split " " |> List.head |> Maybe.withDefault "User"
+
+
+viewCard : Card -> Html Msg
+viewCard card =
+    li []
+        [ div []
+            [ p [] [ b [] [ text card.title ] ]
+            , p [] [ text card.phrase ]
+            , p [] [ i [] [ text card.translation ] ]
+            ]
+        ]
+
+
+viewKeyedCard : Card -> ( String, Html Msg )
+viewKeyedCard card =
+    ( card.id, lazy viewCard card )
 
 
 
@@ -185,6 +220,12 @@ view model =
                 div []
                     [ p [] [ text <| "Hello, " ++ formatUserName userData ++ "!" ]
                     , button [ onClick LogOut ] [ text "Logout" ]
+                    , case model.cards of
+                        CardsList cards ->
+                            ul [] <| List.map viewKeyedCard cards
+
+                        _ ->
+                            text ""
                     ]
         ]
 

@@ -56,7 +56,10 @@ firebase.auth().onAuthStateChanged((user) => {
     .onSnapshot(
       ({ docs }) => {
         app.ports.receiveCards.send({
-          cards: docs.map((doc) => doc.data().content),
+          cards: docs.map((doc) => ({
+            ...doc.data(),
+            id: doc.id,
+          })),
         });
       },
       () => app.ports.receiveCardsError.send(null)
