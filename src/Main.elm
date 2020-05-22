@@ -1,10 +1,12 @@
 port module Main exposing (Model, Msg(..), init, main, update, view)
 
 import Browser
-import Html exposing (Html, b, button, div, h1, i, li, p, text)
-import Html.Events exposing (onClick)
-import Html.Keyed exposing (ul)
-import Html.Lazy exposing (lazy)
+import Css exposing (backgroundColor, em, hex, listStyle, none, padding, px)
+import Html.Styled exposing (Html, b, button, div, h1, i, li, p, text, toUnstyled)
+import Html.Styled.Attributes exposing (css)
+import Html.Styled.Events exposing (onClick)
+import Html.Styled.Keyed exposing (ul)
+import Html.Styled.Lazy exposing (lazy)
 import Json.Decode
 import Json.Decode.Pipeline
 import Json.Encode
@@ -184,8 +186,8 @@ formatUserName useData =
 
 viewCard : Card -> Html Msg
 viewCard card =
-    li []
-        [ div []
+    li [ css [ listStyle none ] ]
+        [ div [ css [ padding (em 1), backgroundColor (hex "e2e2e2") ] ]
             [ p [] [ b [] [ text card.title ] ]
             , p [] [ text card.phrase ]
             , p [] [ i [] [ text card.translation ] ]
@@ -204,7 +206,7 @@ viewKeyedCard card =
 
 view : Model -> Html Msg
 view model =
-    div []
+    div [ css [ padding (em 1) ] ]
         [ h1 [] [ text "Kärtchen" ]
         , case model.user of
             Unknown ->
@@ -222,7 +224,7 @@ view model =
                     , button [ onClick LogOut ] [ text "Logout" ]
                     , case model.cards of
                         CardsList cards ->
-                            ul [] <| List.map viewKeyedCard cards
+                            ul [ css [ padding (px 0) ] ] <| List.map viewKeyedCard cards
 
                         _ ->
                             text ""
@@ -249,7 +251,7 @@ subscriptions _ =
 main : Program () Model Msg
 main =
     Browser.element
-        { view = view
+        { view = view >> toUnstyled
         , init = init
         , update = update
         , subscriptions = subscriptions
