@@ -28,6 +28,12 @@ port signInError : (() -> msg) -> Sub msg
 port signOut : () -> Cmd msg
 
 
+port addNewCard : Json.Encode.Value -> Cmd msg
+
+
+port addNewCardError : (() -> msg) -> Sub msg
+
+
 port saveEditedCard : Json.Encode.Value -> Cmd msg
 
 
@@ -62,12 +68,26 @@ type alias Card =
 type Cards
     = GetCardsFailed
     | SaveEditedCardFailed
+    | AddNewCardFailed
     | CardsList (List Card)
+
+
+type CardFormVariant
+    = AddCard
+    | EditCard Card
+
+
+type alias CardForm =
+    { variant : CardFormVariant
+    , title : String
+    , phrase : String
+    , translation : String
+    }
 
 
 type alias LoggedInModel =
     { user : UserData
-    , editedCard : Maybe Card
+    , cardForm : Maybe CardForm
     , cards : Cards
     }
 
@@ -93,11 +113,14 @@ type Msg
     | LogOut
     | LoggedInData (Result Json.Decode.Error UserData)
     | LoggedInError
+    | AddNewCardError
     | SaveEditedCardError
     | CardsReceived (Result Json.Decode.Error (List Card))
     | CardsReceivedError
-    | StartEditingCard Card
-    | StopEditingCard
+    | OpenAddCardForm
+    | OpenEditCardForm Card
+    | CloseCardForm
+    | SubmitNewCard CardForm
     | SubmitEditedCard Card
     | EditTitle String
     | EditPhrase String
@@ -115,7 +138,7 @@ update msg variant =
                 LoggedInData (Ok userData) ->
                     ( LoggedIn
                         { user = userData
-                        , editedCard = Nothing
+                        , cardForm = Nothing
                         , cards = CardsList []
                         }
                     , Cmd.none
@@ -138,7 +161,7 @@ update msg variant =
                 LoggedInData (Ok userData) ->
                     ( LoggedIn
                         { user = userData
-                        , editedCard = Nothing
+                        , cardForm = Nothing
                         , cards = CardsList []
                         }
                     , Cmd.none
@@ -161,7 +184,7 @@ update msg variant =
                 LoggedInData (Ok userData) ->
                     ( LoggedIn
                         { user = userData
-                        , editedCard = Nothing
+                        , cardForm = Nothing
                         , cards = CardsList []
                         }
                     , Cmd.none
@@ -190,6 +213,9 @@ update msg variant =
                 SaveEditedCardError ->
                     ( LoggedIn { model | cards = SaveEditedCardFailed }, Cmd.none )
 
+                AddNewCardError ->
+                    ( LoggedIn { model | cards = AddNewCardFailed }, Cmd.none )
+
                 CardsReceived (Ok cards) ->
                     ( LoggedIn { model | cards = CardsList cards }, Cmd.none )
 
@@ -199,21 +225,51 @@ update msg variant =
                 CardsReceivedError ->
                     ( LoggedIn { model | cards = GetCardsFailed }, Cmd.none )
 
-                StartEditingCard card ->
-                    ( LoggedIn { model | editedCard = Just card }, Cmd.none )
+                OpenAddCardForm ->
+                    ( LoggedIn
+                        { model
+                            | cardForm =
+                                Just <|
+                                    { variant = AddCard
+                                    , title = ""
+                                    , phrase = ""
+                                    , translation = ""
+                                    }
+                        }
+                    , Cmd.none
+                    )
 
-                StopEditingCard ->
-                    ( LoggedIn { model | editedCard = Nothing }, Cmd.none )
+                OpenEditCardForm card ->
+                    ( LoggedIn
+                        { model
+                            | cardForm =
+                                Just <|
+                                    { variant = EditCard card
+                                    , title = card.title
+                                    , phrase = card.phrase
+                                    , translation = card.translation
+                                    }
+                        }
+                    , Cmd.none
+                    )
+
+                CloseCardForm ->
+                    ( LoggedIn { model | cardForm = Nothing }, Cmd.none )
 
                 SubmitEditedCard card ->
-                    ( LoggedIn { model | editedCard = Nothing }
+                    ( LoggedIn { model | cardForm = Nothing }
                     , saveEditedCard <| editedCardEncoder card model.user.uid
                     )
 
+                SubmitNewCard cardForm ->
+                    ( LoggedIn { model | cardForm = Nothing }
+                    , addNewCard <| newCardEncoder cardForm model.user.uid
+                    )
+
                 EditTitle title ->
-                    case model.editedCard of
+                    case model.cardForm of
                         Just prevEditedCard ->
-                            ( LoggedIn { model | editedCard = Just { prevEditedCard | title = title } }
+                            ( LoggedIn { model | cardForm = Just { prevEditedCard | title = title } }
                             , Cmd.none
                             )
 
@@ -221,9 +277,9 @@ update msg variant =
                             ( LoggedIn model, Cmd.none )
 
                 EditPhrase phrase ->
-                    case model.editedCard of
+                    case model.cardForm of
                         Just prevEditedCard ->
-                            ( LoggedIn { model | editedCard = Just { prevEditedCard | phrase = phrase } }
+                            ( LoggedIn { model | cardForm = Just { prevEditedCard | phrase = phrase } }
                             , Cmd.none
                             )
 
@@ -231,14 +287,24 @@ update msg variant =
                             ( LoggedIn model, Cmd.none )
 
                 EditTranslation translation ->
-                    case model.editedCard of
+                    case model.cardForm of
                         Just prevEditedCard ->
-                            ( LoggedIn { model | editedCard = Just { prevEditedCard | translation = translation } }
+                            ( LoggedIn { model | cardForm = Just { prevEditedCard | translation = translation } }
                             , Cmd.none
                             )
 
                         Nothing ->
                             ( LoggedIn model, Cmd.none )
+
+
+newCardEncoder : CardForm -> String -> Json.Encode.Value
+newCardEncoder cardForm uid =
+    Json.Encode.object
+        [ ( "phrase", Json.Encode.string cardForm.phrase )
+        , ( "title", Json.Encode.string cardForm.title )
+        , ( "translation", Json.Encode.string cardForm.translation )
+        , ( "uid", Json.Encode.string uid )
+        ]
 
 
 editedCardEncoder : Card -> String -> Json.Encode.Value
@@ -287,7 +353,7 @@ viewCard card =
             [ p [] [ b [] [ text card.title ] ]
             , p [] [ text card.phrase ]
             , p [] [ i [] [ text card.translation ] ]
-            , button [ onClick (StartEditingCard card) ] [ text "edit" ]
+            , button [ onClick (OpenEditCardForm card) ] [ text "edit" ]
             ]
         ]
 
@@ -319,38 +385,66 @@ view variant =
                 div []
                     [ p [] [ text <| "Hello, " ++ formatUserName model.user ++ "!" ]
                     , button [ onClick LogOut ] [ text "Logout" ]
-                    , case model.editedCard of
-                        Just card ->
+                    , case model.cardForm of
+                        Just cardForm ->
                             div [ css [ displayFlex, flexDirection column ] ]
-                                [ p [] [ text "Edit card:" ]
+                                [ p []
+                                    [ text <|
+                                        case cardForm.variant of
+                                            AddCard ->
+                                                "Add new card:"
+
+                                            EditCard _ ->
+                                                "Edit card:"
+                                    ]
                                 , label []
                                     [ text "title: "
-                                    , input [ value card.title, onInput EditTitle ] []
+                                    , input [ value cardForm.title, onInput EditTitle ] []
                                     ]
                                 , label []
                                     [ text "phrase: "
-                                    , input [ value card.phrase, onInput EditPhrase ] []
+                                    , input [ value cardForm.phrase, onInput EditPhrase ] []
                                     ]
                                 , label []
                                     [ text "translation: "
-                                    , input [ value card.translation, onInput EditTranslation ] []
+                                    , input [ value cardForm.translation, onInput EditTranslation ] []
                                     ]
                                 , div []
-                                    [ button [ onClick StopEditingCard ] [ text "cancel" ]
-                                    , button [ onClick <| SubmitEditedCard card ] [ text "save" ]
+                                    [ button [ onClick CloseCardForm ] [ text "cancel" ]
+                                    , case cardForm.variant of
+                                        AddCard ->
+                                            button [ onClick <| SubmitNewCard cardForm ] [ text "add" ]
+
+                                        EditCard card ->
+                                            button
+                                                [ onClick <|
+                                                    SubmitEditedCard
+                                                        { id = card.id
+                                                        , title = cardForm.title
+                                                        , phrase = cardForm.phrase
+                                                        , translation = cardForm.translation
+                                                        }
+                                                ]
+                                                [ text "save" ]
                                     ]
                                 ]
 
                         Nothing ->
-                            case model.cards of
-                                CardsList cards ->
-                                    ul [ css [ padding (px 0) ] ] <| List.map viewKeyedCard cards
+                            div []
+                                [ button [ onClick OpenAddCardForm ] [ text "Add new card" ]
+                                , case model.cards of
+                                    CardsList cards ->
+                                        ul [ css [ padding (px 0) ] ] <| List.map viewKeyedCard cards
 
-                                SaveEditedCardFailed ->
-                                    b [] [ text "Could not save edited card" ]
+                                    SaveEditedCardFailed ->
+                                        b [] [ text "Could not save edited card" ]
 
-                                GetCardsFailed ->
-                                    b [] [ text "Could not get cards" ]
+                                    GetCardsFailed ->
+                                        b [] [ text "Could not get cards" ]
+
+                                    AddNewCardFailed ->
+                                        b [] [ text "Could add new card" ]
+                                ]
                     ]
         ]
 
@@ -366,6 +460,7 @@ subscriptions _ =
         , signInError <| always LoggedInError
         , loggedOutUser <| always LogOut
         , saveEditedCardError <| always SaveEditedCardError
+        , addNewCardError <| always AddNewCardError
         , receiveCards <| Json.Decode.decodeValue cardsListDecoder >> CardsReceived
         , receiveCardsError <| always CardsReceivedError
         ]

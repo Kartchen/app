@@ -76,3 +76,13 @@ app.ports.saveEditedCard.subscribe((data) => {
     })
     .catch(() => app.ports.saveEditedCardError.send(null));
 });
+
+app.ports.addNewCard.subscribe((data) => {
+  db.collection(`users/${data.uid}/cards`)
+    .add({
+      phrase: data.phrase,
+      translation: data.translation,
+      title: data.title,
+    })
+    .catch(() => app.ports.addNewCardError.send(null));
+});
