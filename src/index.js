@@ -66,8 +66,13 @@ firebase.auth().onAuthStateChanged((user) => {
     );
 });
 
-app.ports.saveCard.subscribe((data) => {
+app.ports.saveEditedCard.subscribe((data) => {
   db.collection(`users/${data.uid}/cards`)
-    .add({ content: data.content })
-    .catch(() => app.ports.saveCardError.send(null));
+    .doc(data.id)
+    .update({
+      phrase: data.phrase,
+      translation: data.translation,
+      title: data.title,
+    })
+    .catch(() => app.ports.saveEditedCardError.send(null));
 });
