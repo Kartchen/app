@@ -1,4 +1,4 @@
-port module Main exposing (Model, Msg(..), init, main, update, view)
+port module Main exposing (ModelVariant, Msg(..), init, main, update, view)
 
 import Browser
 import Css exposing (column, displayFlex, em, flexDirection, listStyle, none, padding, px)
@@ -51,13 +51,6 @@ type alias UserData =
     }
 
 
-type User
-    = Unknown
-    | LoggedOut
-    | LoginError
-    | LoggedIn UserData
-
-
 type alias Card =
     { id : String
     , title : String
@@ -72,21 +65,23 @@ type Cards
     | CardsList (List Card)
 
 
-type alias Model =
-    { user : User
+type alias LoggedInModel =
+    { user : UserData
     , editedCard : Maybe Card
     , cards : Cards
     }
 
 
-init : () -> ( Model, Cmd Msg )
+type ModelVariant
+    = UnknownUser
+    | LoggedOut
+    | LoginError
+    | LoggedIn LoggedInModel
+
+
+init : () -> ( ModelVariant, Cmd Msg )
 init _ =
-    ( { user = Unknown
-      , cards = CardsList []
-      , editedCard = Nothing
-      }
-    , Cmd.none
-    )
+    ( UnknownUser, Cmd.none )
 
 
 
@@ -109,85 +104,141 @@ type Msg
     | EditTranslation String
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        LogIn ->
-            ( model, signIn () )
+update : Msg -> ModelVariant -> ( ModelVariant, Cmd Msg )
+update msg variant =
+    case variant of
+        UnknownUser ->
+            case msg of
+                LogOut ->
+                    ( LoggedOut, signOut () )
 
-        LogOut ->
-            ( { model | user = LoggedOut }, signOut () )
+                LoggedInData (Ok userData) ->
+                    ( LoggedIn
+                        { user = userData
+                        , editedCard = Nothing
+                        , cards = CardsList []
+                        }
+                    , Cmd.none
+                    )
 
-        LoggedInData (Ok userData) ->
-            ( { model | user = LoggedIn userData }, Cmd.none )
+                LoggedInData (Err _) ->
+                    ( LoginError, Cmd.none )
 
-        LoggedInData (Err _) ->
-            ( { model | user = LoginError }, Cmd.none )
-
-        LoggedInError ->
-            ( { model | user = LoginError }, Cmd.none )
-
-        SaveEditedCardError ->
-            ( { model | cards = SaveEditedCardFailed }, Cmd.none )
-
-        CardsReceived (Ok cards) ->
-            ( { model | cards = CardsList cards }, Cmd.none )
-
-        CardsReceived (Err _) ->
-            ( { model | cards = GetCardsFailed }, Cmd.none )
-
-        CardsReceivedError ->
-            ( { model | cards = GetCardsFailed }, Cmd.none )
-
-        StartEditingCard card ->
-            ( { model | editedCard = Just card }, Cmd.none )
-
-        StopEditingCard ->
-            ( { model | editedCard = Nothing }, Cmd.none )
-
-        SubmitEditedCard card ->
-            case model.user of
-                LoggedIn user ->
-                    ( { model | editedCard = Nothing }, saveEditedCard <| editedCardEncoder card user.uid )
+                LoggedInError ->
+                    ( LoginError, Cmd.none )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( UnknownUser, Cmd.none )
 
-        EditTitle title ->
-            case model.editedCard of
-                Just prevEditedCard ->
-                    let
-                        newEditedCard =
-                            { prevEditedCard | title = title }
-                    in
-                    ( { model | editedCard = Just newEditedCard }, Cmd.none )
+        LoggedOut ->
+            case msg of
+                LogIn ->
+                    ( UnknownUser, signIn () )
 
-                Nothing ->
-                    ( model, Cmd.none )
+                LoggedInData (Ok userData) ->
+                    ( LoggedIn
+                        { user = userData
+                        , editedCard = Nothing
+                        , cards = CardsList []
+                        }
+                    , Cmd.none
+                    )
 
-        EditPhrase phrase ->
-            case model.editedCard of
-                Just prevEditedCard ->
-                    let
-                        newEditedCard =
-                            { prevEditedCard | phrase = phrase }
-                    in
-                    ( { model | editedCard = Just newEditedCard }, Cmd.none )
+                LoggedInData (Err _) ->
+                    ( LoginError, Cmd.none )
 
-                Nothing ->
-                    ( model, Cmd.none )
+                LoggedInError ->
+                    ( LoginError, Cmd.none )
 
-        EditTranslation translation ->
-            case model.editedCard of
-                Just prevEditedCard ->
-                    let
-                        newEditedCard =
-                            { prevEditedCard | translation = translation }
-                    in
-                    ( { model | editedCard = Just newEditedCard }, Cmd.none )
+                _ ->
+                    ( variant, Cmd.none )
 
-                Nothing ->
-                    ( model, Cmd.none )
+        LoginError ->
+            case msg of
+                LogIn ->
+                    ( UnknownUser, signIn () )
+
+                LoggedInData (Ok userData) ->
+                    ( LoggedIn
+                        { user = userData
+                        , editedCard = Nothing
+                        , cards = CardsList []
+                        }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( variant, Cmd.none )
+
+        LoggedIn model ->
+            case msg of
+                LogIn ->
+                    ( variant, Cmd.none )
+
+                LogOut ->
+                    ( LoggedOut, signOut () )
+
+                LoggedInData (Ok userData) ->
+                    ( LoggedIn { model | user = userData }, Cmd.none )
+
+                LoggedInData (Err _) ->
+                    ( LoginError, Cmd.none )
+
+                LoggedInError ->
+                    ( LoginError, Cmd.none )
+
+                SaveEditedCardError ->
+                    ( LoggedIn { model | cards = SaveEditedCardFailed }, Cmd.none )
+
+                CardsReceived (Ok cards) ->
+                    ( LoggedIn { model | cards = CardsList cards }, Cmd.none )
+
+                CardsReceived (Err _) ->
+                    ( LoggedIn { model | cards = GetCardsFailed }, Cmd.none )
+
+                CardsReceivedError ->
+                    ( LoggedIn { model | cards = GetCardsFailed }, Cmd.none )
+
+                StartEditingCard card ->
+                    ( LoggedIn { model | editedCard = Just card }, Cmd.none )
+
+                StopEditingCard ->
+                    ( LoggedIn { model | editedCard = Nothing }, Cmd.none )
+
+                SubmitEditedCard card ->
+                    ( LoggedIn { model | editedCard = Nothing }
+                    , saveEditedCard <| editedCardEncoder card model.user.uid
+                    )
+
+                EditTitle title ->
+                    case model.editedCard of
+                        Just prevEditedCard ->
+                            ( LoggedIn { model | editedCard = Just { prevEditedCard | title = title } }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( LoggedIn model, Cmd.none )
+
+                EditPhrase phrase ->
+                    case model.editedCard of
+                        Just prevEditedCard ->
+                            ( LoggedIn { model | editedCard = Just { prevEditedCard | phrase = phrase } }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( LoggedIn model, Cmd.none )
+
+                EditTranslation translation ->
+                    case model.editedCard of
+                        Just prevEditedCard ->
+                            ( LoggedIn { model | editedCard = Just { prevEditedCard | translation = translation } }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( LoggedIn model, Cmd.none )
 
 
 editedCardEncoder : Card -> String -> Json.Encode.Value
@@ -250,12 +301,12 @@ viewKeyedCard card =
 ---- VIEW ----
 
 
-view : Model -> Html Msg
-view model =
+view : ModelVariant -> Html Msg
+view variant =
     div [ css [ padding (em 1) ] ]
         [ h1 [] [ text "Kärtchen" ]
-        , case model.user of
-            Unknown ->
+        , case variant of
+            UnknownUser ->
                 text "Loading user info..."
 
             LoggedOut ->
@@ -264,9 +315,9 @@ view model =
             LoginError ->
                 text "error obtaining user info"
 
-            LoggedIn userData ->
+            LoggedIn model ->
                 div []
-                    [ p [] [ text <| "Hello, " ++ formatUserName userData ++ "!" ]
+                    [ p [] [ text <| "Hello, " ++ formatUserName model.user ++ "!" ]
                     , button [ onClick LogOut ] [ text "Logout" ]
                     , case model.editedCard of
                         Just card ->
@@ -308,7 +359,7 @@ view model =
 ---- PROGRAM ----
 
 
-subscriptions : Model -> Sub Msg
+subscriptions : ModelVariant -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ signInInfo <| Json.Decode.decodeValue userDataDecoder >> LoggedInData
@@ -320,7 +371,7 @@ subscriptions _ =
         ]
 
 
-main : Program () Model Msg
+main : Program () ModelVariant Msg
 main =
     Browser.element
         { view = view >> toUnstyled
