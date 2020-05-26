@@ -57,11 +57,14 @@ type alias UserData =
     }
 
 
+type alias CardPhrase =
+    { phrase : String, translation : String }
+
+
 type alias Card =
     { id : String
     , title : String
-    , phrase : String
-    , translation : String
+    , phrases : List CardPhrase
     }
 
 
@@ -80,8 +83,7 @@ type CardFormVariant
 type alias CardForm =
     { variant : CardFormVariant
     , title : String
-    , phrase : String
-    , translation : String
+    , phrases : List CardPhrase
     }
 
 
@@ -120,11 +122,13 @@ type Msg
     | OpenAddCardForm
     | OpenEditCardForm Card
     | CloseCardForm
+    | AddCardFormPair
+    | DeleteCardFormPair Int
     | SubmitNewCard CardForm
     | SubmitEditedCard Card
     | EditTitle String
-    | EditPhrase String
-    | EditTranslation String
+    | EditPhrase Int String
+    | EditTranslation Int String
 
 
 update : Msg -> ModelVariant -> ( ModelVariant, Cmd Msg )
@@ -232,8 +236,8 @@ update msg variant =
                                 Just <|
                                     { variant = AddCard
                                     , title = ""
-                                    , phrase = ""
-                                    , translation = ""
+                                    , phrases =
+                                        [ { phrase = "", translation = "" } ]
                                     }
                         }
                     , Cmd.none
@@ -246,8 +250,7 @@ update msg variant =
                                 Just <|
                                     { variant = EditCard card
                                     , title = card.title
-                                    , phrase = card.phrase
-                                    , translation = card.translation
+                                    , phrases = card.phrases
                                     }
                         }
                     , Cmd.none
@@ -276,33 +279,106 @@ update msg variant =
                         Nothing ->
                             ( LoggedIn model, Cmd.none )
 
-                EditPhrase phrase ->
+                EditPhrase index phrase ->
                     case model.cardForm of
                         Just prevEditedCard ->
-                            ( LoggedIn { model | cardForm = Just { prevEditedCard | phrase = phrase } }
+                            ( LoggedIn
+                                { model
+                                    | cardForm =
+                                        Just
+                                            { prevEditedCard
+                                                | phrases =
+                                                    List.indexedMap
+                                                        (\i prevPhrase ->
+                                                            if i == index then
+                                                                { prevPhrase | phrase = phrase }
+
+                                                            else
+                                                                prevPhrase
+                                                        )
+                                                        prevEditedCard.phrases
+                                            }
+                                }
                             , Cmd.none
                             )
 
                         Nothing ->
                             ( LoggedIn model, Cmd.none )
 
-                EditTranslation translation ->
+                EditTranslation index translation ->
                     case model.cardForm of
                         Just prevEditedCard ->
-                            ( LoggedIn { model | cardForm = Just { prevEditedCard | translation = translation } }
+                            ( LoggedIn
+                                { model
+                                    | cardForm =
+                                        Just
+                                            { prevEditedCard
+                                                | phrases =
+                                                    List.indexedMap
+                                                        (\i prevPhrase ->
+                                                            if i == index then
+                                                                { prevPhrase | translation = translation }
+
+                                                            else
+                                                                prevPhrase
+                                                        )
+                                                        prevEditedCard.phrases
+                                            }
+                                }
                             , Cmd.none
                             )
 
                         Nothing ->
                             ( LoggedIn model, Cmd.none )
+
+                AddCardFormPair ->
+                    case model.cardForm of
+                        Just prevEditedCard ->
+                            ( LoggedIn
+                                { model
+                                    | cardForm =
+                                        Just
+                                            { prevEditedCard
+                                                | phrases = { phrase = "", translation = "" } :: prevEditedCard.phrases
+                                            }
+                                }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( LoggedIn model, Cmd.none )
+
+                DeleteCardFormPair index ->
+                    case model.cardForm of
+                        Just prevEditedCard ->
+                            ( LoggedIn
+                                { model
+                                    | cardForm =
+                                        Just
+                                            { prevEditedCard
+                                                | phrases = List.take index prevEditedCard.phrases ++ List.drop (index + 1) prevEditedCard.phrases
+                                            }
+                                }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( LoggedIn model, Cmd.none )
+
+
+phraseEncode : CardPhrase -> Json.Encode.Value
+phraseEncode { phrase, translation } =
+    Json.Encode.object
+        [ ( "phrase", Json.Encode.string phrase )
+        , ( "translation", Json.Encode.string translation )
+        ]
 
 
 newCardEncoder : CardForm -> String -> Json.Encode.Value
 newCardEncoder cardForm uid =
     Json.Encode.object
-        [ ( "phrase", Json.Encode.string cardForm.phrase )
+        [ ( "phrases", Json.Encode.list phraseEncode cardForm.phrases )
         , ( "title", Json.Encode.string cardForm.title )
-        , ( "translation", Json.Encode.string cardForm.translation )
         , ( "uid", Json.Encode.string uid )
         ]
 
@@ -310,9 +386,8 @@ newCardEncoder cardForm uid =
 editedCardEncoder : Card -> String -> Json.Encode.Value
 editedCardEncoder card uid =
     Json.Encode.object
-        [ ( "phrase", Json.Encode.string card.phrase )
+        [ ( "phrases", Json.Encode.list phraseEncode card.phrases )
         , ( "title", Json.Encode.string card.title )
-        , ( "translation", Json.Encode.string card.translation )
         , ( "id", Json.Encode.string card.id )
         , ( "uid", Json.Encode.string uid )
         ]
@@ -326,13 +401,19 @@ userDataDecoder =
         |> Json.Decode.Pipeline.optional "name" Json.Decode.string "User"
 
 
+phraseDecoder : Json.Decode.Decoder CardPhrase
+phraseDecoder =
+    Json.Decode.succeed CardPhrase
+        |> Json.Decode.Pipeline.required "phrase" Json.Decode.string
+        |> Json.Decode.Pipeline.required "translation" Json.Decode.string
+
+
 cardDecoder : Json.Decode.Decoder Card
 cardDecoder =
     Json.Decode.succeed Card
         |> Json.Decode.Pipeline.required "id" Json.Decode.string
         |> Json.Decode.Pipeline.required "title" Json.Decode.string
-        |> Json.Decode.Pipeline.required "phrase" Json.Decode.string
-        |> Json.Decode.Pipeline.required "translation" Json.Decode.string
+        |> Json.Decode.Pipeline.required "phrases" (Json.Decode.list phraseDecoder)
 
 
 cardsListDecoder : Json.Decode.Decoder (List Card)
@@ -351,8 +432,15 @@ viewCard card =
     li [ css [ listStyle none ] ]
         [ div [ css [ padding (em 1) ] ]
             [ p [] [ b [] [ text card.title ] ]
-            , p [] [ text card.phrase ]
-            , p [] [ i [] [ text card.translation ] ]
+            , div [] <|
+                List.map
+                    (\{ phrase, translation } ->
+                        div []
+                            [ p [] [ text phrase ]
+                            , p [] [ i [] [ text translation ] ]
+                            ]
+                    )
+                    card.phrases
             , button [ onClick (OpenEditCardForm card) ] [ text "edit" ]
             ]
         ]
@@ -401,14 +489,33 @@ view variant =
                                     [ text "title: "
                                     , input [ value cardForm.title, onInput EditTitle ] []
                                     ]
-                                , label []
-                                    [ text "phrase: "
-                                    , input [ value cardForm.phrase, onInput EditPhrase ] []
-                                    ]
-                                , label []
-                                    [ text "translation: "
-                                    , input [ value cardForm.translation, onInput EditTranslation ] []
-                                    ]
+                                , div [] <|
+                                    div [] [ button [ onClick AddCardFormPair ] [ text "Add new pair" ] ]
+                                        :: List.indexedMap
+                                            (\index { phrase, translation } ->
+                                                div []
+                                                    [ label []
+                                                        [ text "phrase: "
+                                                        , input
+                                                            [ value phrase
+                                                            , onInput <| EditPhrase index
+                                                            ]
+                                                            []
+                                                        ]
+                                                    , label []
+                                                        [ text "translation: "
+                                                        , input
+                                                            [ value translation
+                                                            , onInput <| EditTranslation index
+                                                            ]
+                                                            []
+                                                        ]
+                                                    , button [ onClick <| DeleteCardFormPair index ]
+                                                        [ text "Delete this pair"
+                                                        ]
+                                                    ]
+                                            )
+                                            cardForm.phrases
                                 , div []
                                     [ button [ onClick CloseCardForm ] [ text "cancel" ]
                                     , case cardForm.variant of
@@ -421,8 +528,7 @@ view variant =
                                                     SubmitEditedCard
                                                         { id = card.id
                                                         , title = cardForm.title
-                                                        , phrase = cardForm.phrase
-                                                        , translation = cardForm.translation
+                                                        , phrases = cardForm.phrases
                                                         }
                                                 ]
                                                 [ text "save" ]

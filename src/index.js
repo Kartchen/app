@@ -70,8 +70,7 @@ app.ports.saveEditedCard.subscribe((data) => {
   db.collection(`users/${data.uid}/cards`)
     .doc(data.id)
     .update({
-      phrase: data.phrase,
-      translation: data.translation,
+      phrases: data.phrases,
       title: data.title,
     })
     .catch(() => app.ports.saveEditedCardError.send(null));
@@ -80,8 +79,7 @@ app.ports.saveEditedCard.subscribe((data) => {
 app.ports.addNewCard.subscribe((data) => {
   db.collection(`users/${data.uid}/cards`)
     .add({
-      phrase: data.phrase,
-      translation: data.translation,
+      phrases: data.phrases,
       title: data.title,
     })
     .catch(() => app.ports.addNewCardError.send(null));
