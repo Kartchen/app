@@ -1,10 +1,12 @@
 port module Main exposing (ModelVariant, Msg(..), init, main, update, view)
 
 import Browser
-import Css exposing (column, displayFlex, em, flexDirection, listStyle, none, padding, px)
-import Html.Styled exposing (Html, b, button, div, h1, i, input, label, li, p, text, toUnstyled)
-import Html.Styled.Attributes exposing (css, value)
-import Html.Styled.Events exposing (onClick, onInput)
+import Card exposing (Card, CardPhrase)
+import CardForm
+import Css exposing (em, listStyle, none, padding, px)
+import Html.Styled as Html exposing (Html, b, button, div, h1, i, li, p, text, toUnstyled)
+import Html.Styled.Attributes exposing (css)
+import Html.Styled.Events exposing (onClick)
 import Html.Styled.Keyed exposing (ul)
 import Html.Styled.Lazy exposing (lazy)
 import Json.Decode
@@ -57,17 +59,6 @@ type alias UserData =
     }
 
 
-type alias CardPhrase =
-    { phrase : String, translation : String }
-
-
-type alias Card =
-    { id : String
-    , title : String
-    , phrases : List CardPhrase
-    }
-
-
 type Cards
     = GetCardsFailed
     | SaveEditedCardFailed
@@ -75,21 +66,21 @@ type Cards
     | CardsList (List Card)
 
 
-type CardFormVariant
-    = AddCard
-    | EditCard Card
-
-
-type alias CardForm =
-    { variant : CardFormVariant
-    , title : String
+type alias CardFormOld =
+    { title : String
     , phrases : List CardPhrase
     }
 
 
+type CardFormState
+    = Hidden
+    | AddCard CardForm.Model
+    | EditCard Card CardForm.Model
+
+
 type alias LoggedInModel =
     { user : UserData
-    , cardForm : Maybe CardForm
+    , cardForm : CardFormState
     , cards : Cards
     }
 
@@ -122,13 +113,7 @@ type Msg
     | OpenAddCardForm
     | OpenEditCardForm Card
     | CloseCardForm
-    | AddCardFormPair
-    | DeleteCardFormPair Int
-    | SubmitNewCard CardForm
-    | SubmitEditedCard Card
-    | EditTitle String
-    | EditPhrase Int String
-    | EditTranslation Int String
+    | CardFormMsg CardForm.Msg
 
 
 update : Msg -> ModelVariant -> ( ModelVariant, Cmd Msg )
@@ -142,7 +127,7 @@ update msg variant =
                 LoggedInData (Ok userData) ->
                     ( LoggedIn
                         { user = userData
-                        , cardForm = Nothing
+                        , cardForm = Hidden
                         , cards = CardsList []
                         }
                     , Cmd.none
@@ -165,7 +150,7 @@ update msg variant =
                 LoggedInData (Ok userData) ->
                     ( LoggedIn
                         { user = userData
-                        , cardForm = Nothing
+                        , cardForm = Hidden
                         , cards = CardsList []
                         }
                     , Cmd.none
@@ -188,7 +173,7 @@ update msg variant =
                 LoggedInData (Ok userData) ->
                     ( LoggedIn
                         { user = userData
-                        , cardForm = Nothing
+                        , cardForm = Hidden
                         , cards = CardsList []
                         }
                     , Cmd.none
@@ -233,11 +218,9 @@ update msg variant =
                     ( LoggedIn
                         { model
                             | cardForm =
-                                Just <|
-                                    { variant = AddCard
-                                    , title = ""
-                                    , phrases =
-                                        [ { phrase = "", translation = "" } ]
+                                AddCard <|
+                                    { title = ""
+                                    , phrases = [ { phrase = "", translation = "" } ]
                                     }
                         }
                     , Cmd.none
@@ -247,9 +230,8 @@ update msg variant =
                     ( LoggedIn
                         { model
                             | cardForm =
-                                Just <|
-                                    { variant = EditCard card
-                                    , title = card.title
+                                EditCard card
+                                    { title = card.title
                                     , phrases = card.phrases
                                     }
                         }
@@ -257,113 +239,54 @@ update msg variant =
                     )
 
                 CloseCardForm ->
-                    ( LoggedIn { model | cardForm = Nothing }, Cmd.none )
+                    ( LoggedIn { model | cardForm = Hidden }, Cmd.none )
 
-                SubmitEditedCard card ->
-                    ( LoggedIn { model | cardForm = Nothing }
-                    , saveEditedCard <| editedCardEncoder card model.user.uid
-                    )
+                CardFormMsg cardFormMsg ->
+                    case cardFormMsg of
+                        CardForm.Internal cardFormInternalMsg ->
+                            case model.cardForm of
+                                Hidden ->
+                                    ( LoggedIn model, Cmd.none )
 
-                SubmitNewCard cardForm ->
-                    ( LoggedIn { model | cardForm = Nothing }
-                    , addNewCard <| newCardEncoder cardForm model.user.uid
-                    )
+                                AddCard cardFormModel ->
+                                    ( LoggedIn
+                                        { model
+                                            | cardForm = AddCard <| CardForm.update cardFormInternalMsg cardFormModel
+                                        }
+                                    , Cmd.none
+                                    )
 
-                EditTitle title ->
-                    case model.cardForm of
-                        Just prevEditedCard ->
-                            ( LoggedIn { model | cardForm = Just { prevEditedCard | title = title } }
-                            , Cmd.none
-                            )
+                                EditCard card cardFormModel ->
+                                    ( LoggedIn
+                                        { model
+                                            | cardForm = EditCard card <| CardForm.update cardFormInternalMsg cardFormModel
+                                        }
+                                    , Cmd.none
+                                    )
 
-                        Nothing ->
-                            ( LoggedIn model, Cmd.none )
+                        CardForm.Out cardFormOutMsg ->
+                            case cardFormOutMsg of
+                                CardForm.Cancel ->
+                                    ( LoggedIn { model | cardForm = Hidden }, Cmd.none )
 
-                EditPhrase index phrase ->
-                    case model.cardForm of
-                        Just prevEditedCard ->
-                            ( LoggedIn
-                                { model
-                                    | cardForm =
-                                        Just
-                                            { prevEditedCard
-                                                | phrases =
-                                                    List.indexedMap
-                                                        (\i prevPhrase ->
-                                                            if i == index then
-                                                                { prevPhrase | phrase = phrase }
+                                CardForm.Save ->
+                                    ( LoggedIn { model | cardForm = Hidden }
+                                    , case model.cardForm of
+                                        Hidden ->
+                                            Cmd.none
 
-                                                            else
-                                                                prevPhrase
-                                                        )
-                                                        prevEditedCard.phrases
-                                            }
-                                }
-                            , Cmd.none
-                            )
+                                        AddCard newCardForm ->
+                                            addNewCard <| newCardEncoder newCardForm model.user.uid
 
-                        Nothing ->
-                            ( LoggedIn model, Cmd.none )
-
-                EditTranslation index translation ->
-                    case model.cardForm of
-                        Just prevEditedCard ->
-                            ( LoggedIn
-                                { model
-                                    | cardForm =
-                                        Just
-                                            { prevEditedCard
-                                                | phrases =
-                                                    List.indexedMap
-                                                        (\i prevPhrase ->
-                                                            if i == index then
-                                                                { prevPhrase | translation = translation }
-
-                                                            else
-                                                                prevPhrase
-                                                        )
-                                                        prevEditedCard.phrases
-                                            }
-                                }
-                            , Cmd.none
-                            )
-
-                        Nothing ->
-                            ( LoggedIn model, Cmd.none )
-
-                AddCardFormPair ->
-                    case model.cardForm of
-                        Just prevEditedCard ->
-                            ( LoggedIn
-                                { model
-                                    | cardForm =
-                                        Just
-                                            { prevEditedCard
-                                                | phrases = { phrase = "", translation = "" } :: prevEditedCard.phrases
-                                            }
-                                }
-                            , Cmd.none
-                            )
-
-                        Nothing ->
-                            ( LoggedIn model, Cmd.none )
-
-                DeleteCardFormPair index ->
-                    case model.cardForm of
-                        Just prevEditedCard ->
-                            ( LoggedIn
-                                { model
-                                    | cardForm =
-                                        Just
-                                            { prevEditedCard
-                                                | phrases = List.take index prevEditedCard.phrases ++ List.drop (index + 1) prevEditedCard.phrases
-                                            }
-                                }
-                            , Cmd.none
-                            )
-
-                        Nothing ->
-                            ( LoggedIn model, Cmd.none )
+                                        EditCard editedCard newCardForm ->
+                                            saveEditedCard <|
+                                                editedCardEncoder
+                                                    { id = editedCard.id
+                                                    , title = newCardForm.title
+                                                    , phrases = newCardForm.phrases
+                                                    }
+                                                    model.user.uid
+                                    )
 
 
 phraseEncode : CardPhrase -> Json.Encode.Value
@@ -374,7 +297,7 @@ phraseEncode { phrase, translation } =
         ]
 
 
-newCardEncoder : CardForm -> String -> Json.Encode.Value
+newCardEncoder : CardFormOld -> String -> Json.Encode.Value
 newCardEncoder cardForm uid =
     Json.Encode.object
         [ ( "phrases", Json.Encode.list phraseEncode cardForm.phrases )
@@ -474,68 +397,13 @@ view variant =
                     [ p [] [ text <| "Hello, " ++ formatUserName model.user ++ "!" ]
                     , button [ onClick LogOut ] [ text "Logout" ]
                     , case model.cardForm of
-                        Just cardForm ->
-                            div [ css [ displayFlex, flexDirection column ] ]
-                                [ p []
-                                    [ text <|
-                                        case cardForm.variant of
-                                            AddCard ->
-                                                "Add new card:"
+                        AddCard cardForm ->
+                            Html.map CardFormMsg <| CardForm.view cardForm
 
-                                            EditCard _ ->
-                                                "Edit card:"
-                                    ]
-                                , label []
-                                    [ text "title: "
-                                    , input [ value cardForm.title, onInput EditTitle ] []
-                                    ]
-                                , div [] <|
-                                    div [] [ button [ onClick AddCardFormPair ] [ text "Add new pair" ] ]
-                                        :: List.indexedMap
-                                            (\index { phrase, translation } ->
-                                                div []
-                                                    [ label []
-                                                        [ text "phrase: "
-                                                        , input
-                                                            [ value phrase
-                                                            , onInput <| EditPhrase index
-                                                            ]
-                                                            []
-                                                        ]
-                                                    , label []
-                                                        [ text "translation: "
-                                                        , input
-                                                            [ value translation
-                                                            , onInput <| EditTranslation index
-                                                            ]
-                                                            []
-                                                        ]
-                                                    , button [ onClick <| DeleteCardFormPair index ]
-                                                        [ text "Delete this pair"
-                                                        ]
-                                                    ]
-                                            )
-                                            cardForm.phrases
-                                , div []
-                                    [ button [ onClick CloseCardForm ] [ text "cancel" ]
-                                    , case cardForm.variant of
-                                        AddCard ->
-                                            button [ onClick <| SubmitNewCard cardForm ] [ text "add" ]
+                        EditCard _ cardForm ->
+                            Html.map CardFormMsg <| CardForm.view cardForm
 
-                                        EditCard card ->
-                                            button
-                                                [ onClick <|
-                                                    SubmitEditedCard
-                                                        { id = card.id
-                                                        , title = cardForm.title
-                                                        , phrases = cardForm.phrases
-                                                        }
-                                                ]
-                                                [ text "save" ]
-                                    ]
-                                ]
-
-                        Nothing ->
+                        Hidden ->
                             div []
                                 [ button [ onClick OpenAddCardForm ] [ text "Add new card" ]
                                 , case model.cards of
