@@ -36,6 +36,12 @@ port addNewCard : Json.Encode.Value -> Cmd msg
 port addNewCardError : (() -> msg) -> Sub msg
 
 
+port deleteCard : Json.Encode.Value -> Cmd msg
+
+
+port deleteCardError : (() -> msg) -> Sub msg
+
+
 port saveEditedCard : Json.Encode.Value -> Cmd msg
 
 
@@ -62,6 +68,7 @@ type alias UserData =
 type Cards
     = GetCardsFailed
     | SaveEditedCardFailed
+    | DeleteCardFailed
     | AddNewCardFailed
     | CardsList (List Card)
 
@@ -107,11 +114,13 @@ type Msg
     | LoggedInData (Result Json.Decode.Error UserData)
     | LoggedInError
     | AddNewCardError
+    | DeleteCardError
     | SaveEditedCardError
     | CardsReceived (Result Json.Decode.Error (List Card))
     | CardsReceivedError
     | OpenAddCardForm
     | OpenEditCardForm Card
+    | DeleteCard Card
     | CloseCardForm
     | CardFormMsg CardForm.Msg
 
@@ -214,6 +223,12 @@ update msg variant =
                 CardsReceivedError ->
                     ( LoggedIn { model | cards = GetCardsFailed }, Cmd.none )
 
+                DeleteCard card ->
+                    ( LoggedIn model, deleteCard <| existingCardEncoder card model.user.uid )
+
+                DeleteCardError ->
+                    ( LoggedIn { model | cards = DeleteCardFailed }, Cmd.none )
+
                 OpenAddCardForm ->
                     ( LoggedIn
                         { model
@@ -280,7 +295,7 @@ update msg variant =
 
                                         EditCard editedCard newCardForm ->
                                             saveEditedCard <|
-                                                editedCardEncoder
+                                                existingCardEncoder
                                                     { id = editedCard.id
                                                     , title = newCardForm.title
                                                     , phrases = newCardForm.phrases
@@ -306,8 +321,8 @@ newCardEncoder cardForm uid =
         ]
 
 
-editedCardEncoder : Card -> String -> Json.Encode.Value
-editedCardEncoder card uid =
+existingCardEncoder : Card -> String -> Json.Encode.Value
+existingCardEncoder card uid =
     Json.Encode.object
         [ ( "phrases", Json.Encode.list phraseEncode card.phrases )
         , ( "title", Json.Encode.string card.title )
@@ -372,6 +387,7 @@ viewCard card =
                     )
                     card.phrases
             , button [ onClick (OpenEditCardForm card) ] [ text "edit" ]
+            , button [ onClick (DeleteCard card) ] [ text "delete" ]
             ]
         ]
 
@@ -435,7 +451,10 @@ view variant =
                                         b [] [ text "Could not get cards" ]
 
                                     AddNewCardFailed ->
-                                        b [] [ text "Could add new card" ]
+                                        b [] [ text "Could not add new card" ]
+
+                                    DeleteCardFailed ->
+                                        b [] [ text "Could not delete card" ]
                                 ]
                     ]
         ]
@@ -453,6 +472,7 @@ subscriptions _ =
         , loggedOutUser <| always LogOut
         , saveEditedCardError <| always SaveEditedCardError
         , addNewCardError <| always AddNewCardError
+        , deleteCardError <| always DeleteCardError
         , receiveCards <| Json.Decode.decodeValue cardsListDecoder >> CardsReceived
         , receiveCardsError <| always CardsReceivedError
         ]

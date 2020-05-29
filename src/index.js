@@ -84,3 +84,16 @@ app.ports.addNewCard.subscribe((data) => {
     })
     .catch(() => app.ports.addNewCardError.send(null));
 });
+
+app.ports.deleteCard.subscribe((data) => {
+  if (
+    confirm(
+      `Are you sure you want to delete this "${data.title}" card? There is no way back`
+    )
+  ) {
+    db.collection(`users/${data.uid}/cards`)
+      .doc(data.id)
+      .delete()
+      .catch(() => app.ports.saveEditedCardError.send(null));
+  }
+});
