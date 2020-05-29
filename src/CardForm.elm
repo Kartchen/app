@@ -1,7 +1,7 @@
 module CardForm exposing (InternalMsg, Model, Msg(..), OutputMsg(..), update, view)
 
 import Card exposing (Card, CardPhrase)
-import Css exposing (column, displayFlex, flexDirection)
+import Css exposing (alignItems, baseline, column, displayFlex, em, flexDirection, margin2, marginBottom, px)
 import Html.Styled exposing (Html, button, div, input, label, text)
 import Html.Styled.Attributes exposing (css, value)
 import Html.Styled.Events exposing (onClick, onInput)
@@ -80,11 +80,24 @@ view model =
             , input [ value model.title, onInput <| Internal << EditTitle ] []
             ]
         , div [] <|
-            div [] [ button [ onClick <| Internal AddCardFormPair ] [ text "Add new pair" ] ]
+            div []
+                [ button
+                    [ onClick <| Internal AddCardFormPair
+                    , css [ margin2 (em 2) (px 0) ]
+                    ]
+                    [ text "Add new pair" ]
+                ]
                 :: List.indexedMap
                     (\index { phrase, translation } ->
-                        div []
-                            [ label []
+                        div
+                            [ css
+                                [ displayFlex
+                                , flexDirection column
+                                , alignItems baseline
+                                , marginBottom (em 1.5)
+                                ]
+                            ]
+                            [ label [ css [ marginBottom (em 0.625) ] ]
                                 [ text "phrase: "
                                 , input
                                     [ value phrase
@@ -92,7 +105,7 @@ view model =
                                     ]
                                     []
                                 ]
-                            , label []
+                            , label [ css [ marginBottom (em 0.625) ] ]
                                 [ text "translation: "
                                 , input
                                     [ value translation

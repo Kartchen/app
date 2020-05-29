@@ -3,7 +3,7 @@ port module Main exposing (ModelVariant, Msg(..), init, main, update, view)
 import Browser
 import Card exposing (Card, CardPhrase)
 import CardForm
-import Css exposing (em, listStyle, none, padding, px)
+import Css exposing (alignItems, auto, border2, borderBottom, borderBottom2, borderRadius, center, displayFlex, em, fontSize, justifyContent, lastChild, listStyle, margin, margin2, marginBottom, maxWidth, none, padding, px, rem, solid, spaceBetween)
 import Html.Styled as Html exposing (Html, b, button, div, h1, i, li, p, text, toUnstyled)
 import Html.Styled.Attributes exposing (css)
 import Html.Styled.Events exposing (onClick)
@@ -352,15 +352,22 @@ formatUserName useData =
 
 viewCard : Card -> Html Msg
 viewCard card =
-    li [ css [ listStyle none ] ]
+    li
+        [ css
+            [ listStyle none
+            , border2 (px 1) solid
+            , marginBottom <| em 1
+            , borderRadius <| em 0.25
+            ]
+        ]
         [ div [ css [ padding (em 1) ] ]
-            [ p [] [ b [] [ text card.title ] ]
+            [ p [ css [ margin (px 0) ] ] [ b [] [ text card.title ] ]
             , div [] <|
                 List.map
                     (\{ phrase, translation } ->
-                        div []
+                        div [ css [ borderBottom2 (px 1) solid, lastChild [ borderBottom (px 0) ] ] ]
                             [ p [] [ text phrase ]
-                            , p [] [ i [] [ text translation ] ]
+                            , p [] [ i [ css [ fontSize (em 0.75) ] ] [ text translation ] ]
                             ]
                     )
                     card.phrases
@@ -380,7 +387,7 @@ viewKeyedCard card =
 
 view : ModelVariant -> Html Msg
 view variant =
-    div [ css [ padding (em 1) ] ]
+    div [ css [ padding (em 1), maxWidth <| rem 40, margin2 (px 0) auto ] ]
         [ h1 [] [ text "Kärtchen" ]
         , case variant of
             UnknownUser ->
@@ -394,8 +401,19 @@ view variant =
 
             LoggedIn model ->
                 div []
-                    [ p [] [ text <| "Hello, " ++ formatUserName model.user ++ "!" ]
-                    , button [ onClick LogOut ] [ text "Logout" ]
+                    [ div
+                        [ css
+                            [ displayFlex
+                            , justifyContent spaceBetween
+                            , alignItems center
+                            ]
+                        ]
+                        [ p [] [ text <| "Hello, " ++ formatUserName model.user ++ "!" ]
+                        , button
+                            [ onClick LogOut
+                            ]
+                            [ text "Logout" ]
+                        ]
                     , case model.cardForm of
                         AddCard cardForm ->
                             Html.map CardFormMsg <| CardForm.view cardForm
