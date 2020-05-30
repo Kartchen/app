@@ -1,10 +1,10 @@
 module CardForm exposing (InternalMsg, Model, Msg(..), OutputMsg(..), update, view)
 
 import Card exposing (Card, CardPhrase)
-import Css exposing (alignItems, baseline, column, displayFlex, em, flexDirection, margin2, marginBottom, px)
-import Html.Styled exposing (Html, button, div, input, label, text)
-import Html.Styled.Attributes exposing (css, value)
-import Html.Styled.Events exposing (onClick, onInput)
+import Css exposing (alignItems, baseline, border3, column, displayFlex, em, flexDirection, hex, invalid, margin2, marginBottom, px, solid)
+import Html.Styled exposing (Html, button, div, form, input, label, text)
+import Html.Styled.Attributes exposing (css, minlength, type_, value)
+import Html.Styled.Events exposing (onClick, onInput, onSubmit)
 
 
 type alias Model =
@@ -74,10 +74,19 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div [ css [ displayFlex, flexDirection column ] ]
+    form
+        [ onSubmit <| Out <| Save
+        , css [ displayFlex, flexDirection column ]
+        ]
         [ label []
             [ text "title: "
-            , input [ value model.title, onInput <| Internal << EditTitle ] []
+            , input
+                [ value model.title
+                , onInput <| Internal << EditTitle
+                , minlength 2
+                , css [ invalid [ border3 (px 1) solid (hex "ff0000") ] ]
+                ]
+                []
             ]
         , div [] <|
             div []
@@ -102,6 +111,7 @@ view model =
                                 , input
                                     [ value phrase
                                     , onInput <| Internal << EditPhrase index
+                                    , minlength 2
                                     ]
                                     []
                                 ]
@@ -110,6 +120,7 @@ view model =
                                 , input
                                     [ value translation
                                     , onInput <| Internal << EditTranslation index
+                                    , minlength 2
                                     ]
                                     []
                                 ]
@@ -121,6 +132,6 @@ view model =
                     model.phrases
         , div []
             [ button [ onClick <| Out Cancel ] [ text "cancel" ]
-            , button [ onClick <| Out <| Save ] [ text "save" ]
+            , input [ type_ "submit" ] [ text "save" ]
             ]
         ]
