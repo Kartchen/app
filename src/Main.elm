@@ -381,8 +381,7 @@ viewCard card =
                 List.map
                     (\{ phrase, translation } ->
                         div [ css [ borderBottom2 (px 1) solid, lastChild [ borderBottom (px 0) ] ] ]
-                            [ p [] [ text phrase ]
-                            , p [] [ i [ css [ fontSize (em 0.75) ] ] [ text translation ] ]
+                            [ p [] [ text <| phrase ++ " - ", i [ css [ fontSize (em 0.75) ] ] [ text translation ] ]
                             ]
                     )
                     card.phrases
