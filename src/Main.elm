@@ -3,9 +3,9 @@ port module Main exposing (ModelVariant, Msg(..), init, main, update, view)
 import Browser
 import Card exposing (Card, CardPhrase)
 import CardForm
-import Css exposing (alignItems, auto, border2, borderBottom, borderBottom2, borderRadius, center, displayFlex, em, fontSize, justifyContent, lastChild, listStyle, margin, margin2, marginBottom, maxWidth, none, padding, px, rem, solid, spaceBetween)
+import Css exposing (alignItems, auto, block, border2, borderBottom, borderBottom2, borderRadius, center, display, displayFlex, em, fontSize, justifyContent, lastChild, listStyle, margin, margin2, marginBottom, marginLeft, maxWidth, none, padding, px, rem, solid, spaceBetween)
 import Html.Styled as Html exposing (Html, b, button, div, h1, i, li, p, text, toUnstyled)
-import Html.Styled.Attributes exposing (css)
+import Html.Styled.Attributes exposing (classList, css)
 import Html.Styled.Events exposing (onClick)
 import Html.Styled.Keyed exposing (ul)
 import Html.Styled.Lazy exposing (lazy)
@@ -89,6 +89,7 @@ type alias LoggedInModel =
     { user : UserData
     , cardForm : CardFormState
     , cards : Cards
+    , expandedCardTitle : Maybe String
     }
 
 
@@ -123,6 +124,8 @@ type Msg
     | DeleteCard Card
     | CloseCardForm
     | CardFormMsg CardForm.Msg
+    | ExpandCard String
+    | CollapseCard
 
 
 update : Msg -> ModelVariant -> ( ModelVariant, Cmd Msg )
@@ -138,6 +141,7 @@ update msg variant =
                         { user = userData
                         , cardForm = Hidden
                         , cards = CardsList []
+                        , expandedCardTitle = Nothing
                         }
                     , Cmd.none
                     )
@@ -161,6 +165,7 @@ update msg variant =
                         { user = userData
                         , cardForm = Hidden
                         , cards = CardsList []
+                        , expandedCardTitle = Nothing
                         }
                     , Cmd.none
                     )
@@ -184,6 +189,7 @@ update msg variant =
                         { user = userData
                         , cardForm = Hidden
                         , cards = CardsList []
+                        , expandedCardTitle = Nothing
                         }
                     , Cmd.none
                     )
@@ -255,6 +261,12 @@ update msg variant =
 
                 CloseCardForm ->
                     ( LoggedIn { model | cardForm = Hidden }, Cmd.none )
+
+                ExpandCard cardTitle ->
+                    ( LoggedIn { model | expandedCardTitle = Just cardTitle }, Cmd.none )
+
+                CollapseCard ->
+                    ( LoggedIn { model | expandedCardTitle = Nothing }, Cmd.none )
 
                 CardFormMsg cardFormMsg ->
                     case cardFormMsg of
@@ -365,8 +377,8 @@ formatUserName useData =
     useData.name |> String.split " " |> List.head |> withDefault "User"
 
 
-viewCard : Card -> Html Msg
-viewCard card =
+viewCard : ( Card, Maybe String ) -> Html Msg
+viewCard ( card, expandedCardTitle ) =
     li
         [ css
             [ listStyle none
@@ -376,8 +388,39 @@ viewCard card =
             ]
         ]
         [ div [ css [ padding (em 1) ] ]
-            [ p [ css [ margin (px 0) ] ] [ b [] [ text card.title ] ]
-            , div [] <|
+            [ p [ css [ margin (px 0), displayFlex, justifyContent spaceBetween ] ]
+                [ b [] [ text card.title ]
+                , button
+                    [ css [ marginLeft auto ]
+                    , onClick <|
+                        case expandedCardTitle of
+                            Nothing ->
+                                ExpandCard card.title
+
+                            Just title ->
+                                if title == card.title then
+                                    CollapseCard
+
+                                else
+                                    ExpandCard card.title
+                    ]
+                    [ text "toggle" ]
+                ]
+            , div
+                [ css
+                    [ case expandedCardTitle of
+                        Nothing ->
+                            display none
+
+                        Just title ->
+                            if title == card.title then
+                                display block
+
+                            else
+                                display none
+                    ]
+                ]
+              <|
                 List.map
                     (\{ phrase, translation } ->
                         div [ css [ borderBottom2 (px 1) solid, lastChild [ borderBottom (px 0) ] ] ]
@@ -391,9 +434,9 @@ viewCard card =
         ]
 
 
-viewKeyedCard : Card -> ( String, Html Msg )
-viewKeyedCard card =
-    ( card.id, lazy viewCard card )
+viewKeyedCard : Maybe String -> Card -> ( String, Html Msg )
+viewKeyedCard expandedCardTitle card =
+    ( card.id, lazy viewCard ( card, expandedCardTitle ) )
 
 
 
@@ -441,7 +484,7 @@ view variant =
                                 [ button [ onClick OpenAddCardForm ] [ text "Add new card" ]
                                 , case model.cards of
                                     CardsList cards ->
-                                        ul [ css [ padding (px 0) ] ] <| List.map viewKeyedCard cards
+                                        ul [ css [ padding (px 0) ] ] <| List.map (viewKeyedCard model.expandedCardTitle) cards
 
                                     SaveEditedCardFailed ->
                                         b [] [ text "Could not save edited card" ]
