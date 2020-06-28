@@ -1,10 +1,10 @@
 module CardForm exposing (InternalMsg, Model, Msg(..), OutputMsg(..), update, view)
 
-import Card exposing (Card, CardPhrase)
+import Card exposing (CardPhrase)
 import Css exposing (alignItems, baseline, border3, column, displayFlex, em, flexDirection, hex, invalid, margin2, marginBottom, px, solid)
-import Html.Styled exposing (Html, button, div, form, input, label, text)
-import Html.Styled.Attributes exposing (css, minlength, type_, value)
-import Html.Styled.Events exposing (onClick, onInput, onSubmit)
+import Html.Styled exposing (Html, button, div, input, label, text)
+import Html.Styled.Attributes exposing (css, minlength, value)
+import Html.Styled.Events exposing (onClick, onInput)
 
 
 type alias Model =
@@ -74,9 +74,8 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    form
-        [ onSubmit <| Out <| Save
-        , css [ displayFlex, flexDirection column ]
+    div
+        [ css [ displayFlex, flexDirection column ]
         ]
         [ label []
             [ text "title: "
@@ -132,6 +131,6 @@ view model =
                     model.phrases
         , div []
             [ button [ onClick <| Out Cancel ] [ text "cancel" ]
-            , input [ type_ "submit" ] [ text "save" ]
+            , button [ onClick <| Out Save ] [ text "save" ]
             ]
         ]
