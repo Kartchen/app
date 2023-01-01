@@ -23,7 +23,7 @@
     "husky": "^4.2.5",
     "lint-staged": "^10.2.4",
     "node-elm-compiler": "^5.0.4",
-    "parcel": "^1.12.4",
+    "parcel": "^2.8.2",
     "prettier": "^2.0.5",
     "prettier-plugin-elm": "^0.7.0"
   },
